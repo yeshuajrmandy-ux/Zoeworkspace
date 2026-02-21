@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Zoe Workspace</title>
+  <meta name="application-name" content="Zoe Workspace">
+  <meta name="theme-color" content="#141414">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Zoe Workspace">
+  <meta name="description" content="Zoe Workspace — your personal code editor">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@4.18.0/css/xterm.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/addon/dialog/dialog.css">
+  <style>
+    :root {
+      --bg:#141414; --bg2:#1c1c1c; --bg3:#252525; --bg4:#2e2e2e;
+      --accent:#555; --accent2:#6e6e6e; --accent3:#aaa;
+      --border:#333; --text:#d4d4d4; --text2:#888;
+      --green:#4caf50; --orange:#e6a817; --red:#cf4444; --white:#f0f0f0;
+      --blue:#2979ff; --purple:#7c4dff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+
+    /* ── SPLASH ── */
+    #splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .7s ease;}
+    #splash.hidden{opacity:0;pointer-events:none;}
+    .splash-logo{width:110px;height:110px;border-radius:28px;display:flex;align-items:center;justify-content:center;margin-bottom:28px;box-shadow:0 0 0 1px #3a3a3a,0 12px 40px rgba(0,0,0,.7);animation:breathe 2s ease-in-out infinite;overflow:hidden;}
+    .splash-logo canvas{width:110px;height:110px;}
+    @keyframes breathe{0%,100%{box-shadow:0 0 0 1px #3a3a3a,0 8px 32px rgba(0,0,0,.6);}50%{box-shadow:0 0 0 1px #666,0 12px 48px rgba(0,0,0,.8);}}
+    .splash-title{font-family:'Segoe UI',sans-serif;font-size:28px;font-weight:700;color:var(--white);letter-spacing:4px;margin-bottom:6px;}
+    .splash-sub{font-size:12px;color:var(--text2);margin-bottom:44px;font-family:'Segoe UI',sans-serif;letter-spacing:2px;}
+    .splash-bar-wrap{width:200px;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+    .splash-bar{height:100%;width:0%;background:linear-gradient(90deg,#555,#bbb);border-radius:2px;transition:width .12s linear;}
+    .splash-txt{font-size:11px;color:var(--text2);margin-top:12px;font-family:monospace;letter-spacing:1.5px;}
+
+    /* ── LAYOUT ── */
+    body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+    /* ── TOOLBAR ── */
+    #toolbar{background:var(--bg2);padding:5px 7px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:3px;align-items:center;}
+    #toolbar button,#toolbar select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:11px;transition:all .15s;white-space:nowrap;}
+    #toolbar button:hover{background:var(--bg4);color:var(--white);border-color:var(--accent2);}
+    #toolbar button:active{transform:scale(.96);}
+    .btn-run{background:#1e3320!important;border-color:#3a5c3e!important;color:#81c784!important;}
+    .btn-run:hover{background:#2e4d33!important;color:#fff!important;}
+    .btn-file{background:#1f1f1f!important;border-color:#555!important;color:#bbb!important;}
+    .btn-file:hover{background:#333!important;color:#fff!important;border-color:#888!important;}
+    .btn-danger{background:#2a1010!important;border-color:#6b2020!important;color:#e88!important;}
+    .btn-danger:hover{background:#5a1a1a!important;color:#fff!important;}
+    .btn-collab{background:#1a2a1a!important;border-color:#2e7d32!important;color:#a5d6a7!important;}
+    .btn-collab.active{background:#2e7d32!important;color:#fff!important;}
+    .btn-github{background:#1a1a2a!important;border-color:#3949ab!important;color:#9fa8da!important;}
+    .btn-netlify{background:#002f2a!important;border-color:#00c7b7!important;color:#80ffee!important;}
+    .btn-debug{background:#2a1a2a!important;border-color:#7b1fa2!important;color:#ce93d8!important;}
+
+    /* ── MAIN ── */
+    #main{display:flex;flex:1;overflow:hidden;}
+
+    /* ── SIDEBAR ── */
+    #sidebar{width:190px;background:var(--bg2);border-right:1px solid var(--border);padding:6px;overflow-y:auto;display:flex;flex-direction:column;transition:width .25s;}
+    #sidebar.collapsed{width:0;padding:0;overflow:hidden;}
+    #sidebar h3{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:2px;padding:4px 4px 8px;}
+    #folder-name{font-size:11px;color:var(--accent3);margin-bottom:6px;padding:3px 6px;background:var(--bg3);border-radius:4px;display:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:2px solid var(--accent2);}
+    #sidebar ul{list-style:none;flex:1;}
+    #sidebar li{padding:4px 7px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:11px;border-radius:4px;color:var(--text);transition:background .12s;}
+    #sidebar li:hover{background:var(--bg3);}
+    #sidebar li.active{background:var(--bg4);color:var(--white);border-left:2px solid var(--accent3);}
+    #sidebar li span.del{color:var(--red);visibility:hidden;font-size:10px;padding:0 2px;}
+    #sidebar li:hover span.del{visibility:visible;}
+    .fsz{color:var(--text2);font-size:9px;margin-left:3px;}
+    #sb-btns{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    #sb-btns button{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:5px;cursor:pointer;font-size:11px;transition:all .15s;}
+    #sb-btns button:hover{background:var(--bg4);color:var(--white);}
+
+    /* ── EDITOR ── */
+    #editor-container{flex:1;display:flex;flex-direction:column;min-width:0;}
+    #editor-header{background:var(--bg2);padding:4px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:11px;}
+    #editor-header .unsaved{color:var(--orange);margin-left:5px;font-weight:bold;}
+    #fs-indicator{font-size:9px;color:var(--green);margin-left:5px;}
+    #collab-indicator{font-size:9px;color:#81c784;margin-left:5px;}
+    .CodeMirror{height:100%;font-size:12px;background:var(--bg)!important;color:var(--text)!important;line-height:1.5;}
+    .CodeMirror-gutters{background:var(--bg2)!important;border-right:1px solid var(--border)!important;}
+    .CodeMirror-linenumber{color:var(--text2)!important;font-size:11px;}
+    .CodeMirror-cursor{border-left:2px solid var(--accent3)!important;}
+    .CodeMirror-selected{background:rgba(100,100,100,.25)!important;}
+    .CodeMirror-wrap .CodeMirror-scroll{overflow-x:hidden!important;}
+
+    /* ── RIGHT PANEL ── */
+    #right-panel{width:42%;display:flex;flex-direction:column;border-left:1px solid var(--border);}
+    #preview-container{flex:2;display:flex;flex-direction:column;min-height:120px;}
+    #preview-header{background:var(--bg2);padding:4px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2);}
+    #preview-header button{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;}
+    #preview-header button:hover{background:var(--bg4);color:var(--white);}
+    iframe{width:100%;height:100%;border:none;background:#1a1a1a;}
+
+    /* ── TERMINAL ── */
+    #terminal-container{flex:1;border-top:1px solid var(--border);display:flex;flex-direction:column;min-height:100px;}
+    #terminal-header{background:var(--bg2);padding:4px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2);}
+    #terminal{height:100%;width:100%;}
+
+    /* ── DEBUGGER PANEL ── */
+    #debug-container{border-top:1px solid var(--border);display:none;flex-direction:column;max-height:220px;background:var(--bg2);}
+    #debug-header{background:var(--bg3);padding:4px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#ce93d8;}
+    #debug-repl-input{width:100%;background:var(--bg);border:none;border-bottom:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:monospace;font-size:11px;outline:none;}
+    #debug-output{flex:1;overflow-y:auto;font-family:monospace;font-size:11px;padding:4px 8px;color:var(--text);}
+    #debug-output .out-line{padding:1px 0;border-bottom:1px solid #222;}
+    #debug-output .out-err{color:var(--red);}
+    #debug-output .out-ok{color:#81c784;}
+
+    /* ── LOGS ── */
+    #logs-panel{background:var(--bg2);border-top:1px solid var(--border);max-height:90px;overflow-y:auto;font-family:monospace;font-size:10px;padding:3px;}
+    #logs-panel div{border-bottom:1px solid var(--border);padding:1px 4px;color:var(--accent3);}
+
+    /* ── STATUS BAR ── */
+    #status-bar{background:var(--bg3);color:var(--text2);padding:2px 10px;font-size:10px;display:flex;gap:14px;align-items:center;border-top:1px solid var(--border);}
+
+    /* ── MODALS (shared) ── */
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);align-items:center;justify-content:center;z-index:1000;}
+    .modal-content{background:var(--bg2);padding:20px;border-radius:10px;width:min(380px,92vw);color:var(--text);border:1px solid var(--border);max-height:85vh;overflow-y:auto;}
+    .modal-content h3{color:var(--white);margin-bottom:14px;font-size:14px;}
+    .modal-content label{font-size:11px;color:var(--text2);display:block;margin-bottom:3px;margin-top:10px;}
+    .modal-content input,.modal-content textarea,.modal-content select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px;font-family:monospace;}
+    .modal-content textarea{height:80px;resize:vertical;}
+    .modal-btns{text-align:right;margin-top:14px;display:flex;gap:6px;justify-content:flex-end;}
+    .modal-btns button{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-size:12px;}
+    .modal-btns button:hover{background:var(--bg4);color:var(--white);}
+    .modal-btns button.primary{background:var(--bg3);border-color:var(--accent2);color:var(--white);}
+    .modal-info{font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;}
+    .modal-badge{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-family:monospace;font-size:12px;color:var(--accent3);margin:4px 0;}
+
+    /* ── PERMISSIONS MODAL special ── */
+    #perm-modal .modal-content{text-align:center;}
+    .perm-logo{width:70px;height:70px;border-radius:18px;margin:0 auto 14px;overflow:hidden;}
+    .perm-logo canvas{width:70px;height:70px;}
+    .perm-item{display:flex;align-items:flex-start;gap:10px;text-align:left;background:var(--bg3);border-radius:6px;padding:10px;margin-bottom:8px;}
+    .perm-icon{font-size:20px;flex-shrink:0;}
+    .perm-title{font-size:12px;color:var(--white);margin-bottom:2px;}
+    .perm-desc{font-size:10px;color:var(--text2);}
+
+    /* ── COLLAB CURSORS ── */
+    .remote-cursor{position:absolute;border-left:2px solid #4caf50;pointer-events:none;}
+    .remote-cursor-label{background:#4caf50;color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;white-space:nowrap;}
+
+    /* ── TOAST ── */
+    #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--bg4);color:var(--white);border:1px solid var(--border);padding:9px 20px;border-radius:20px;font-size:12px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9998;white-space:nowrap;max-width:90vw;text-align:center;}
+    #toast.show{opacity:1;}
+    #toast.error{background:#4a1010;border-color:var(--red);color:#f88;}
+    #toast.success{background:#1a3320;border-color:var(--green);color:#81c784;}
+
+    #fileInput,#folderInput{display:none;}
+  </style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash">
+  <div class="splash-logo"><canvas id="splashIconCanvas" width="512" height="512"></canvas></div>
+  <div class="splash-title">ZOE WORKSPACE</div>
+  <div class="splash-sub">YOUR PERSONAL CODE EDITOR</div>
+  <div class="splash-bar-wrap"><div class="splash-bar" id="splashBar"></div></div>
+  <div class="splash-txt" id="splashTxt">INITIALIZING...</div>
+</div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="fileInput" accept="*/*" multiple>
+<input type="file" id="folderInput" accept="*/*" multiple webkitdirectory>
+
+<!-- ── PERMISSIONS MODAL ── -->
+<div class="modal" id="perm-modal">
+  <div class="modal-content">
+    <div class="perm-logo"><canvas id="permLogoCanvas" width="512" height="512" style="width:70px;height:70px;border-radius:18px;"></canvas></div>
+    <h3 style="text-align:center;">Zoe Workspace needs a few permissions</h3>
+    <p style="font-size:11px;color:var(--text2);margin-bottom:14px;text-align:center;">These help the app work better on your device</p>
+    <div class="perm-item">
+      <div class="perm-icon">🔔</div>
+      <div><div class="perm-title">Notifications</div><div class="perm-desc">Get notified when files are saved, deployments finish, or collaborators join.</div></div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-icon">📂</div>
+      <div><div class="perm-title">File Access</div><div class="perm-desc">Open and save files from your device storage. (Via file picker — Android standard)</div></div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-icon">🌐</div>
+      <div><div class="perm-title">Internet Access</div><div class="perm-desc">Required for GitHub, Netlify, and real-time collaboration features.</div></div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-icon">💾</div>
+      <div><div class="perm-title">Local Storage</div><div class="perm-desc">Auto-saves your workspace so your work is never lost.</div></div>
+    </div>
+    <div class="modal-btns" style="justify-content:center;margin-top:16px;">
+      <button class="primary" onclick="grantPermissions()" style="background:#2e4d33;border-color:#4caf50;color:#81c784;padding:10px 28px;font-size:13px;">Allow All & Continue</button>
+    </div>
+    <p style="font-size:10px;color:var(--text2);margin-top:10px;text-align:center;">You can change these in your browser settings anytime</p>
+  </div>
+</div>
+
+<!-- ── TOOLBAR ── -->
+<div id="toolbar">
+  <button onclick="toggleSidebar()">☰</button>
+  <button onclick="newFile()">📄 New</button>
+  <button class="btn-danger" onclick="deleteCurrent()">🗑</button>
+  <button class="btn-run" onclick="runCode()">▶ Run</button>
+  <button onclick="formatCode()">✨</button>
+  <button class="btn-file" onclick="openFiles()">📂 Open</button>
+  <button class="btn-file" onclick="openFolderAndroid()">📁 Folder</button>
+  <button class="btn-file" onclick="saveToDisk()">💾 Save</button>
+  <button id="btnDesktopFolder" onclick="openFolderDesktop()" style="display:none" class="btn-file">🖥 PC</button>
+  <button onclick="saveToStorage()">🗄</button>
+  <button onclick="loadFromStorage()">📤</button>
+  <button onclick="downloadZip()">📦 ZIP</button>
+  <button onclick="toggleTerminal()">⌨️</button>
+  <button class="btn-collab" id="collabBtn" onclick="openCollabModal()">🤝 Collab</button>
+  <button class="btn-github" onclick="openGithubModal()">🐙 GitHub</button>
+  <button class="btn-netlify" onclick="openNetlifyModal()">🌍 Netlify</button>
+  <button class="btn-netlify" onclick="openVercelModal()" style="border-color:#fff!important;color:#eee!important;">▲ Vercel</button>
+  <button class="btn-debug" onclick="toggleDebugger()">🐞 Debug</button>
+  <select id="templateSelect" onchange="applyTemplate()">
+    <option value="">📋 Template</option>
+    <option value="html">HTML5</option>
+    <option value="react">React</option>
+    <option value="vue">Vue</option>
+  </select>
+  <select id="themeSelect" onchange="changeTheme(this.value)">
+    <option value="default">Theme</option>
+    <option value="dracula">Dracula</option>
+    <option value="monokai">Monokai</option>
+  </select>
+  <button onclick="openSettings()">⚙️</button>
+</div>
+
+<!-- ── MAIN ── -->
+<div id="main">
+  <div id="sidebar">
+    <h3>Explorer</h3>
+    <div id="folder-name"></div>
+    <ul id="fileList"></ul>
+    <div id="sb-btns">
+      <button onclick="newFile()">+ New File</button>
+      <button onclick="openFiles()">📂 Open Files</button>
+    </div>
+  </div>
+
+  <div id="editor-container">
+    <div id="editor-header">
+      <span>
+        <span id="currentFileName">untitled</span>
+        <span id="fs-indicator"></span>
+        <span id="collab-indicator"></span>
+      </span>
+      <span>
+        <span id="unsavedIndicator" class="unsaved"></span>
+        <button onclick="searchInEditor()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px;">🔍</button>
+      </span>
+    </div>
+    <textarea id="editor"></textarea>
+  </div>
+
+  <div id="right-panel">
+    <div id="preview-container">
+      <div id="preview-header">
+        <span>Preview</span>
+        <button onclick="runCode()">↻ Run</button>
+      </div>
+      <iframe id="output" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+    </div>
+    <div id="debug-container">
+      <div id="debug-header">
+        <span>🐞 Debugger / REPL</span>
+        <div style="display:flex;gap:6px;">
+          <button onclick="inspectVars()" style="background:none;border:none;color:#ce93d8;cursor:pointer;font-size:11px;">Inspect</button>
+          <button onclick="clearDebug()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:11px;">Clear</button>
+        </div>
+      </div>
+      <input type="text" id="debug-repl-input" placeholder="Type JS expression and press Enter (runs in preview context)..." onkeydown="debugReplKey(event)">
+      <div id="debug-output"></div>
+    </div>
+    <div id="terminal-container" style="display:none;">
+      <div id="terminal-header">
+        <span>Terminal</span>
+        <button onclick="clearTerminal()" style="background:none;border:none;color:var(--text2);cursor:pointer;">Clear</button>
+      </div>
+      <div id="terminal"></div>
+    </div>
+    <div id="logs-panel">
+      <div style="color:var(--text2);">Console:</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STATUS BAR ── -->
+<div id="status-bar">
+  <span id="file-size-indicator">0 B</span>
+  <span>UTF-8</span>
+  <span>Ln <span id="cursor-line">1</span> Col <span id="cursor-col">1</span></span>
+  <span id="fs-mode-indicator">💾 Browser Storage</span>
+  <span id="collab-status"></span>
+  <span id="unsaved-status" style="margin-left:auto;color:var(--orange);"></span>
+</div>
+
+<!-- ── SETTINGS MODAL ── -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3>⚙️ Settings</h3>
+    <label>Font Size</label><input type="number" id="fontSize" value="12" min="8" max="32">
+    <label>Tab Size</label><input type="number" id="tabSize" value="2" min="2" max="8">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+      <input type="checkbox" id="lineWrap" checked style="width:auto;"> Word Wrap (long lines)
+    </label>
+    <div class="modal-btns"><button class="primary" onclick="applySettings()">Apply</button><button onclick="closeModal('modal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- ── COLLABORATION MODAL ── -->
+<div class="modal" id="collab-modal">
+  <div class="modal-content">
+    <h3>🤝 Real-Time Collaboration</h3>
+    <p class="modal-info">Collaborate with others using Yjs + WebRTC. No backend needed — works peer-to-peer. Share your room code with anyone and edit together in real time.</p>
+    <label>Room Code (create or join one)</label>
+    <input type="text" id="collab-room" placeholder="e.g. zoews-myproject-123" style="margin-bottom:6px;">
+    <p class="modal-info">Share this code with your collaborator. Both of you enter the same code and click Join.</p>
+    <div id="collab-status-box" style="display:none;background:var(--bg3);border-radius:5px;padding:8px;margin-top:8px;font-size:11px;color:#81c784;"></div>
+    <div class="modal-btns">
+      <button class="primary" onclick="startCollab()" style="background:#1e3320;border-color:#4caf50;color:#81c784;">🤝 Join Room</button>
+      <button onclick="stopCollab()" style="background:#2a1010;border-color:#cf4444;color:#f88;">✖ Leave</button>
+      <button onclick="closeModal('collab-modal')">Close</button>
+    </div>
+    <p class="modal-info" style="margin-top:10px;">⚠️ Requires internet. Uses public WebRTC signaling servers.</p>
+  </div>
+</div>
+
+<!-- ── GITHUB MODAL ── -->
+<div class="modal" id="github-modal">
+  <div class="modal-content">
+    <h3>🐙 GitHub Integration</h3>
+    <label>Personal Access Token</label>
+    <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx">
+    <label>Owner (username or org)</label>
+    <input type="text" id="gh-owner" placeholder="e.g. zoeworks">
+    <label>Repository name</label>
+    <input type="text" id="gh-repo" placeholder="e.g. my-project">
+    <label>Branch</label>
+    <input type="text" id="gh-branch" value="main">
+    <p class="modal-info">Generate a token at github.com → Settings → Developer Settings → Personal Access Tokens. Needs <strong>repo</strong> scope.</p>
+    <div class="modal-btns">
+      <button class="primary" onclick="githubLoad()" style="background:#1a1a2a;border-color:#3949ab;color:#9fa8da;">📥 Load Repo</button>
+      <button onclick="githubPush()" style="background:#1a1a2a;border-color:#3949ab;color:#9fa8da;">⬆ Push File</button>
+      <button onclick="closeModal('github-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── NETLIFY MODAL ── -->
+<div class="modal" id="netlify-modal">
+  <div class="modal-content">
+    <h3>🚀 Deploy to Netlify</h3>
+    <label>Netlify Personal Access Token</label>
+    <input type="password" id="net-token" placeholder="Your Netlify token">
+    <label>Site name (optional)</label>
+    <input type="text" id="net-site" placeholder="my-zoe-project (leave blank for auto)">
+    <p class="modal-info">Get a token at app.netlify.com → User Settings → Applications → Personal access tokens. Your whole project (all files) will be deployed as a static site.</p>
+    <div id="netlify-result" style="display:none;background:var(--bg3);border-radius:5px;padding:8px;margin-top:8px;font-size:11px;"></div>
+    <div class="modal-btns">
+      <button class="primary" onclick="deployNetlify()" style="background:#002f2a;border-color:#00c7b7;color:#80ffee;">🚀 Deploy Now</button>
+      <button onclick="closeModal('netlify-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── VERCEL MODAL ── -->
+<div class="modal" id="vercel-modal">
+  <div class="modal-content">
+    <h3>▲ Deploy to Vercel</h3>
+    <label>Vercel Access Token</label>
+    <input type="password" id="ver-token" placeholder="Your Vercel token">
+    <label>Project name (optional)</label>
+    <input type="text" id="ver-project" placeholder="my-zoe-app (leave blank for auto)">
+    <p class="modal-info">Get a token at vercel.com → Settings → Tokens → Create. Your whole project will be deployed as a live site instantly.</p>
+    <div id="vercel-result" style="display:none;background:var(--bg3);border-radius:5px;padding:8px;margin-top:8px;font-size:11px;"></div>
+    <div class="modal-btns">
+      <button class="primary" onclick="deployVercel()" style="background:#111;border-color:#fff;color:#fff;">▲ Deploy Now</button>
+      <button onclick="closeModal('vercel-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ── LIBRARIES ── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/json/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/jsx/jsx.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/mode/vue/vue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/addon/search/search.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.60.0/addon/dialog/dialog.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prettier@2.8.8/standalone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prettier@2.8.8/parser-babel.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prettier@2.8.8/parser-html.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prettier@2.8.8/parser-css.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prettier@2.8.8/parser-typescript.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.2.0/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@4.18.0/lib/xterm.js"></script>
+<!-- Yjs loaded as proper scripts for Android WebView compatibility -->
+<script src="https://cdn.jsdelivr.net/npm/yjs@13/dist/yjs.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/y-webrtc@10/dist/y-webrtc.umd.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════
+// LOGO GENERATOR
+// ════════════════════════════════════════════════════
+var iconDataUrl = '';
+function drawIcon(canvas) {
+  var s = canvas.width;
+  var ctx = canvas.getContext('2d');
+  // Background
+  var g = ctx.createLinearGradient(0,0,s,s);
+  g.addColorStop(0,'#222'); g.addColorStop(1,'#0e0e0e');
+  ctx.fillStyle=g; ctx.fillRect(0,0,s,s);
+  // Subtle grid lines
+  ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=s*0.002;
+  for(var i=0;i<8;i++){
+    ctx.beginPath();ctx.moveTo(i*s/8,0);ctx.lineTo(i*s/8,s);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*s/8);ctx.lineTo(s,i*s/8);ctx.stroke();
+  }
+  // Accent circle in top-right
+  var ag=ctx.createRadialGradient(s*.85,s*.15,0,s*.85,s*.15,s*.3);
+  ag.addColorStop(0,'rgba(160,160,160,0.12)'); ag.addColorStop(1,'rgba(160,160,160,0)');
+  ctx.fillStyle=ag; ctx.fillRect(0,0,s,s);
+  // Z letter — bold, slightly offset for style
+  ctx.save();
+  ctx.shadowColor='rgba(200,200,200,0.15)'; ctx.shadowBlur=s*.04;
+  ctx.fillStyle='#e8e8e8'; ctx.font='bold '+Math.round(s*.52)+'px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('Z',s*.47,s*.39);
+  ctx.restore();
+  // Thin separator line
+  ctx.strokeStyle='#3a3a3a'; ctx.lineWidth=Math.max(1,s*.005);
+  ctx.beginPath(); ctx.moveTo(s*.18,s*.62); ctx.lineTo(s*.82,s*.62); ctx.stroke();
+  // WORKSPACE label
+  ctx.fillStyle='#5a5a5a'; ctx.font=Math.round(s*.09)+'px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('WORKSPACE',s*.5,s*.76);
+  // Bottom accent bar
+  var bar=ctx.createLinearGradient(0,s*.93,s,s*.93);
+  bar.addColorStop(0,'rgba(150,150,150,0)'); bar.addColorStop(.5,'rgba(150,150,150,0.25)'); bar.addColorStop(1,'rgba(150,150,150,0)');
+  ctx.fillStyle=bar; ctx.fillRect(0,s*.92,s,s*.06);
+  return canvas;
+}
+
+function setupPWAIcon() {
+  var canvas = document.getElementById('splashIconCanvas');
+  drawIcon(canvas);
+  iconDataUrl = canvas.toDataURL('image/png');
+  // Copy to permissions modal logo
+  drawIcon(document.getElementById('permLogoCanvas'));
+  // Favicon
+  var fav = document.querySelector("link[rel*='icon']") || document.createElement('link');
+  fav.type='image/png'; fav.rel='shortcut icon'; fav.href=iconDataUrl;
+  document.head.appendChild(fav);
+  // Dynamic PWA manifest with icon
+  try {
+    var manifest = {
+      name:'Zoe Workspace', short_name:'ZoeWS',
+      description:'Your personal code editor',
+      display:'standalone', background_color:'#141414', theme_color:'#141414',
+      orientation:'any', start_url:'.',
+      icons:[{src:iconDataUrl,sizes:'512x512',type:'image/png',purpose:'any maskable'}]
+    };
+    var blob = new Blob([JSON.stringify(manifest)],{type:'application/json'});
+    var ml = document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(blob);
+    document.head.appendChild(ml);
+  } catch(e){}
+}
+
+// ════════════════════════════════════════════════════
+// SPLASH ANIMATION
+// ════════════════════════════════════════════════════
+var splashMsgs=['INITIALIZING...','LOADING EDITOR...','SETTING UP WORKSPACE...','ALMOST READY...','WELCOME!'];
+var sp=0;
+var splashInterval=setInterval(function(){
+  sp+=20;
+  document.getElementById('splashBar').style.width=sp+'%';
+  document.getElementById('splashTxt').textContent=splashMsgs[Math.floor(sp/20)-1]||'READY';
+  if(sp>=100){
+    clearInterval(splashInterval);
+    setTimeout(function(){
+      document.getElementById('splash').classList.add('hidden');
+      setTimeout(function(){document.getElementById('splash').style.display='none';},700);
+    },300);
+  }
+},300);
+
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+var files={
+  'index.html':'<!DOCTYPE html>\n<html>\n<head>\n<title>App</title>\n<style>\n  body{background:#1a1a1a;color:#d4d4d4;font-family:sans-serif;padding:20px;font-size:14px;word-wrap:break-word;overflow-wrap:break-word;}\n  h1{font-size:1.4rem;margin-bottom:12px;}\n</style>\n</head>\n<body>\n<h1>Hello from Zoe Workspace!</h1>\n<p>Edit the files on the left and press Run to see your changes here.</p>\n<script>console.log(\'ready!\');<\/script>\n</body>\n</html>',
+  'style.css':'body{background:#1a1a1a;color:#d4d4d4;font-family:sans-serif;padding:20px;word-wrap:break-word;}',
+  'script.js':"console.log('script loaded');"
+};
+var currentFile='index.html';
+var editor,terminal;
+var unsaved=false,terminalVisible=false,debuggerVisible=false,sidebarVisible=true;
+var logs=[],directoryHandle=null,fileHandles={};
+var fsSupported=('showDirectoryPicker' in window);
+var isMobile=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+// Collaboration state
+var ydoc=null,yjsProvider=null,yfiles=null,isCollaborating=false,isApplyingRemote=false;
+// GitHub state
+var ghToken='',ghOwner='',ghRepo='',ghBranch='main';
+// Auto-save timer
+var autoSaveTimer;
+
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+window.onload=function(){
+  setupPWAIcon();
+
+  editor=CodeMirror.fromTextArea(document.getElementById('editor'),{
+    lineNumbers:true, mode:'htmlmixed', theme:'default', tabSize:2,
+    lineWrapping:true,
+    extraKeys:{"Ctrl-F":"find","Ctrl-S":function(){saveToDisk();},"Ctrl-Enter":runCode}
+  });
+  editor.on('change',function(){
+    unsaved=true; updateUnsavedIndicator();
+    if(isCollaborating&&!isApplyingRemote&&yfiles&&currentFile){
+      files[currentFile]=editor.getValue();
+      try{yfiles.set(currentFile,files[currentFile]);}catch(e){}
+    }
+  });
+  editor.on('cursorActivity',updateCursorPos);
+
+  // Auto-save (debounced)
+  editor.on('change',function(){
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer=setTimeout(async function(){
+      if(!unsaved||!currentFile)return;
+      files[currentFile]=editor.getValue();
+      if(directoryHandle&&fileHandles[currentFile]){
+        try{var w=await fileHandles[currentFile].createWritable();await w.write(files[currentFile]);await w.close();unsaved=false;updateUnsavedIndicator();}catch(e){}
+      } else {
+        try{localStorage.setItem('workspace',JSON.stringify(files));unsaved=false;updateUnsavedIndicator();}catch(e){}
+      }
+    },2000);
+  });
+
+  if(fsSupported&&!isMobile) document.getElementById('btnDesktopFolder').style.display='inline-block';
+  document.getElementById('fileInput').addEventListener('change',handleFileInput);
+  document.getElementById('folderInput').addEventListener('change',handleFolderInput);
+
+  // Load stored GitHub/Netlify tokens
+  try{
+    ghToken=localStorage.getItem('zw_gh_token')||'';
+    ghOwner=localStorage.getItem('zw_gh_owner')||'';
+    ghRepo=localStorage.getItem('zw_gh_repo')||'';
+    ghBranch=localStorage.getItem('zw_gh_branch')||'main';
+    document.getElementById('gh-token').value=ghToken;
+    document.getElementById('gh-owner').value=ghOwner;
+    document.getElementById('gh-repo').value=ghRepo;
+    document.getElementById('gh-branch').value=ghBranch;
+    var nt=localStorage.getItem('zw_net_token')||'';
+    document.getElementById('net-token').value=nt;
+  }catch(e){}
+
+  switchFile(currentFile);
+  renderSidebar();
+  setupConsoleCapture();
+  initTerminal();
+  updateFSMode();
+
+  // Show permissions modal on first visit
+  var permsSeen=localStorage.getItem('zw_perms_seen');
+  if(!permsSeen){
+    setTimeout(function(){document.getElementById('perm-modal').style.display='flex';},1800);
+  }
+};
+
+// ════════════════════════════════════════════════════
+// PERMISSIONS
+// ════════════════════════════════════════════════════
+async function grantPermissions(){
+  document.getElementById('perm-modal').style.display='none';
+  localStorage.setItem('zw_perms_seen','1');
+  // Request notification permission
+  if('Notification' in window){
+    try{
+      var result=await Notification.requestPermission();
+      if(result==='granted') showToast('🔔 Notifications enabled!','success');
+    }catch(e){}
+  }
+}
+
+function sendNotification(title, body){
+  try{
+    if(Notification.permission==='granted'){
+      new Notification(title,{body:body,icon:iconDataUrl,badge:iconDataUrl});
+    }
+  }catch(e){}
+}
+
+// ════════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════════
+function toggleSidebar(){
+  sidebarVisible=!sidebarVisible;
+  document.getElementById('sidebar').classList.toggle('collapsed',!sidebarVisible);
+}
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+function showToast(msg,type,ms){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='show'+(type==='error'?' error':type==='success'?' success':'');
+  clearTimeout(t._t);
+  t._t=setTimeout(function(){t.className='';},ms||2500);
+}
+function updateUnsavedIndicator(){
+  document.getElementById('unsavedIndicator').innerText=unsaved?'●':'';
+  document.getElementById('unsaved-status').innerText=unsaved?'unsaved':'';
+}
+function updateCursorPos(){
+  var p=editor.getCursor();
+  document.getElementById('cursor-line').innerText=p.line+1;
+  document.getElementById('cursor-col').innerText=p.ch+1;
+}
+function updateFileSize(){
+  var s=new Blob([files[currentFile]||'']).size;
+  document.getElementById('file-size-indicator').innerText=s<1024?s+' B':(s/1024).toFixed(1)+' KB';
+}
+
+// ════════════════════════════════════════════════════
+// ANDROID FILE HANDLING
+// ════════════════════════════════════════════════════
+function openFiles(){document.getElementById('fileInput').click();}
+function openFolderAndroid(){document.getElementById('folderInput').click();}
+
+function handleFileInput(e){
+  var list=Array.from(e.target.files);if(!list.length)return;
+  var done=0;
+  list.forEach(function(f){
+    var r=new FileReader();
+    r.onload=function(ev){
+      files[f.name]=ev.target.result; done++;
+      if(done===list.length){
+        currentFile=list[0].name;
+        editor.setValue(files[currentFile]||''); setEditorMode(currentFile);
+        unsaved=false;updateUnsavedIndicator();renderSidebar();updateFSMode();
+        showToast('✅ Loaded '+done+' file(s)','success');
+      }
+    };
+    r.readAsText(f);
+  });
+  e.target.value='';
+}
+
+function handleFolderInput(e){
+  var list=Array.from(e.target.files);if(!list.length)return;
+  files={};var done=0;
+  list.forEach(function(f){
+    var path=f.webkitRelativePath||f.name;
+    if(path.includes('node_modules')||/\/\./.test(path)){done++;return;}
+    var r=new FileReader();
+    r.onload=function(ev){
+      files[path]=ev.target.result;done++;
+      if(done===list.length){
+        currentFile=Object.keys(files).sort()[0];
+        editor.setValue(files[currentFile]||'');setEditorMode(currentFile);
+        unsaved=false;updateUnsavedIndicator();
+        var p0=(list[0].webkitRelativePath||'').split('/');
+        if(p0.length>1){var fn=document.getElementById('folder-name');fn.textContent='📁 '+p0[0];fn.style.display='block';}
+        renderSidebar();updateFSMode();
+        showToast('✅ Loaded folder ('+Object.keys(files).length+' files)','success');
+      }
+    };
+    r.onerror=function(){done++;};
+    r.readAsText(f);
+  });
+  e.target.value='';
+}
+
+// ════════════════════════════════════════════════════
+// SAVE
+// ════════════════════════════════════════════════════
+async function saveToDisk(){
+  if(!currentFile)return;
+  files[currentFile]=editor.getValue();
+  if(directoryHandle&&fileHandles[currentFile]){
+    try{
+      var w=await fileHandles[currentFile].createWritable();
+      await w.write(files[currentFile]);await w.close();
+      unsaved=false;updateUnsavedIndicator();renderSidebar();
+      showToast('💾 Saved: '+currentFile,'success');
+      sendNotification('Zoe Workspace','💾 Saved: '+currentFile);
+    }catch(e){showToast('Save failed: '+e.message,'error');}
+    return;
+  }
+  // Android: download file
+  var blob=new Blob([files[currentFile]],{type:'text/plain'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=currentFile.split('/').pop();a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  unsaved=false;updateUnsavedIndicator();
+  showToast('📥 Downloaded: '+currentFile.split('/').pop(),'success');
+  sendNotification('Zoe Workspace','📥 Downloaded: '+currentFile.split('/').pop());
+}
+
+async function openFolderDesktop(){
+  if(!fsSupported){showToast('Desktop Chrome/Edge only','error');return;}
+  try{directoryHandle=await window.showDirectoryPicker({mode:'readwrite'});}
+  catch(e){if(e.name!=='AbortError')showToast('Error: '+e.message,'error');return;}
+  files={};fileHandles={};
+  for await(var entry of directoryHandle.values()){
+    if(entry.name.startsWith('.')||entry.name==='node_modules')continue;
+    if(entry.kind==='file'){
+      try{files[entry.name]=await(await entry.getFile()).text();fileHandles[entry.name]=entry;}catch(e){}
+    }
+  }
+  if(!Object.keys(files).length)files['index.html']='';
+  var fn=document.getElementById('folder-name');fn.textContent='📁 '+directoryHandle.name;fn.style.display='block';
+  currentFile=Object.keys(files).sort()[0];
+  editor.setValue(files[currentFile]||'');setEditorMode(currentFile);
+  unsaved=false;updateUnsavedIndicator();renderSidebar();updateFSMode();
+  showToast('✅ Opened: '+directoryHandle.name,'success');
+}
+
+function updateFSMode(){
+  var el=document.getElementById('fs-mode-indicator'),fi=document.getElementById('fs-indicator');
+  if(directoryHandle){el.textContent='📁 '+directoryHandle.name;fi.textContent=' 💾';fi.style.color='#4caf50';}
+  else if(isMobile){el.textContent='📱 Android Mode';fi.textContent='';}
+  else{el.textContent='💾 Browser Storage';fi.textContent='';}
+}
+
+// ════════════════════════════════════════════════════
+// FILE TREE
+// ════════════════════════════════════════════════════
+function renderSidebar(){
+  var ul=document.getElementById('fileList');ul.innerHTML='';
+  Object.keys(files).sort().forEach(function(f){
+    var li=document.createElement('li');
+    li.className=f===currentFile?'active':'';
+    var s=new Blob([files[f]||'']).size,st=s<1024?s+' B':(s/1024).toFixed(1)+' KB';
+    var safe=f.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    li.innerHTML='<span onclick="switchFile(\''+safe+'\')" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+f.split('/').pop()+'<span class="fsz">'+st+'</span></span>'
+      +'<span class="del" onclick="deleteFile(\''+safe+'\',event)">✖</span>';
+    ul.appendChild(li);
+  });
+  document.getElementById('currentFileName').innerText=currentFile.split('/').pop();
+  updateFileSize();
+}
+
+function switchFile(name){
+  if(!name)return;
+  if(currentFile&&unsaved)files[currentFile]=editor.getValue();
+  currentFile=name;editor.setValue(files[name]||'');setEditorMode(name);
+  unsaved=false;updateUnsavedIndicator();renderSidebar();updateFileSize();
+  if(isMobile&&sidebarVisible)toggleSidebar();
+}
+
+function setEditorMode(n){
+  var m='htmlmixed';
+  if(n.endsWith('.js')||n.endsWith('.jsx'))m='jsx';
+  else if(n.endsWith('.ts')||n.endsWith('.tsx'))m='text/typescript';
+  else if(n.endsWith('.css'))m='css';
+  else if(n.endsWith('.py'))m='python';
+  else if(n.endsWith('.md'))m='markdown';
+  else if(n.endsWith('.json'))m='application/json';
+  else if(n.endsWith('.vue'))m='vue';
+  else if(n.endsWith('.xml'))m='xml';
+  editor.setOption('mode',m);
+}
+
+function newFile(){
+  var n=prompt('File name (e.g. app.js):');if(!n)return;
+  if(n.includes('..')||n.startsWith('/')){showToast('Invalid name','error');return;}
+  if(files[n]!==undefined){showToast('Already exists','error');return;}
+  files[n]='';switchFile(n);
+}
+
+function deleteFile(name,ev){
+  if(ev)ev.stopPropagation();
+  if(!confirm('Remove "'+name+'" from editor?'))return;
+  delete files[name];delete fileHandles[name];
+  var k=Object.keys(files);
+  if(!k.length){files['untitled.txt']='';currentFile='untitled.txt';}
+  else{currentFile=k[0];}
+  editor.setValue(files[currentFile]||'');setEditorMode(currentFile);renderSidebar();
+}
+function deleteCurrent(){if(currentFile)deleteFile(currentFile);}
+
+// ════════════════════════════════════════════════════
+// PREVIEW
+// ════════════════════════════════════════════════════
+function runCode(){
+  if(currentFile&&unsaved)files[currentFile]=editor.getValue();
+  var doc=document.getElementById('output').contentWindow.document;
+  doc.open();
+  // Inject a base CSS reset so content looks good in dark preview
+  var darkReset='<style>*{box-sizing:border-box;}body{background:#1a1a1a;color:#d4d4d4;font-family:sans-serif;font-size:14px;padding:12px;word-wrap:break-word;overflow-wrap:break-word;}</style>';
+  if(files['index.html']){
+    var h=files['index.html'];
+    // Inject dark reset only if no background already set
+    if(!h.includes('background:')&&!h.includes('background-color:'))h=h.replace('<head>','<head>'+darkReset);
+    if(files['style.css'])h=h.replace('</head>','<style>'+files['style.css']+'</style></head>');
+    if(files['script.js'])h=h.replace('</body>','<script>'+files['script.js']+'<\/script></body>');
+    doc.write(h);
+  } else {
+    doc.write('<body style="background:#1a1a1a;color:#d4d4d4;font-family:sans-serif;padding:20px;"><h3>Create index.html to preview</h3></body>');
+  }
+  doc.close();
+}
+
+function setupConsoleCapture(){
+  document.getElementById('output').addEventListener('load',function(){
+    try{
+      var win=document.getElementById('output').contentWindow;
+      win.console.log=function(){addLog(Array.from(arguments).map(String).join(' '));};
+      win.console.error=function(){addLog('[ERR] '+Array.from(arguments).map(String).join(' '));};
+    }catch(e){}
+  });
+}
+function addLog(msg){
+  var p=document.getElementById('logs-panel'),d=document.createElement('div');
+  d.textContent='> '+msg;p.appendChild(d);p.scrollTop=p.scrollHeight;
+}
+
+// ════════════════════════════════════════════════════
+// DEBUGGER / REPL
+// ════════════════════════════════════════════════════
+function toggleDebugger(){
+  debuggerVisible=!debuggerVisible;
+  var c=document.getElementById('debug-container');
+  c.style.display=debuggerVisible?'flex':'none';
+  if(debuggerVisible)document.getElementById('debug-repl-input').focus();
+}
+function clearDebug(){document.getElementById('debug-output').innerHTML='';}
+function debugReplKey(e){if(e.key==='Enter'){evalInPreview(document.getElementById('debug-repl-input').value);document.getElementById('debug-repl-input').value='';}}
+function evalInPreview(code){
+  var out=document.getElementById('debug-output');
+  var line=document.createElement('div');
+  line.className='out-line';
+  try{
+    var result=document.getElementById('output').contentWindow.eval(code);
+    var str=typeof result==='object'?JSON.stringify(result,null,2):String(result);
+    line.innerHTML='<span style="color:#aaa;">» '+escHtml(code)+'</span><br><span class="out-ok">← '+escHtml(str)+'</span>';
+  }catch(ex){
+    line.innerHTML='<span style="color:#aaa;">» '+escHtml(code)+'</span><br><span class="out-err">✖ '+escHtml(ex.message)+'</span>';
+  }
+  out.appendChild(line);out.scrollTop=out.scrollHeight;
+}
+function inspectVars(){
+  try{
+    var win=document.getElementById('output').contentWindow;
+    var vars={};
+    ['document','window','console','location','history','navigator'].forEach(function(k){vars[k]='[built-in]';});
+    for(var key in win){
+      if(!['document','window','console','location','history','navigator','frames','parent','self','top','globalThis'].includes(key)){
+        try{
+          var val=win[key];
+          if(typeof val!=='function')vars[key]=typeof val==='object'?'[object]':String(val);
+        }catch(e){}
+      }
+    }
+    var out=document.getElementById('debug-output');
+    var line=document.createElement('div');
+    line.className='out-line';
+    var entries=Object.entries(vars).slice(0,30).map(function(e){return e[0]+': '+e[1];}).join('\n');
+    line.innerHTML='<span style="color:#ce93d8;">── Variables in preview ──</span><br><pre style="font-size:10px;color:#aaa;white-space:pre-wrap;">'+escHtml(entries)+'</pre>';
+    out.appendChild(line);out.scrollTop=out.scrollHeight;
+  }catch(e){showToast('Run code first','error');}
+}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ════════════════════════════════════════════════════
+// TERMINAL
+// ════════════════════════════════════════════════════
+function initTerminal(){
+  if(!terminal){
+    terminal=new Terminal({theme:{background:'#141414',foreground:'#d4d4d4'},fontSize:12});
+    terminal.open(document.getElementById('terminal'));
+    terminal.prompt='$ ';
+    terminal.write('Zoe Workspace Terminal — type "help"\r\n'+terminal.prompt);
+    terminal.onData(handleTerminalInput);
+  }
+}
+var cmdBuf='';
+function handleTerminalInput(d){
+  var c=d.charCodeAt(0);
+  if(c===13){terminal.write('\r\n');execCmd(cmdBuf);cmdBuf='';terminal.write(terminal.prompt);}
+  else if(c===127){if(cmdBuf.length){cmdBuf=cmdBuf.slice(0,-1);terminal.write('\b \b');}}
+  else{cmdBuf+=d;terminal.write(d);}
+}
+function execCmd(line){
+  var p=line.trim().split(' '),cmd=p[0];
+  if(cmd==='help') terminal.write('Commands: help, ls, cat [file], echo [text], clear, node [code], run [file], save, pwd, collab [room]\r\n');
+  else if(cmd==='echo') terminal.write(p.slice(1).join(' ')+'\r\n');
+  else if(cmd==='clear') terminal.clear();
+  else if(cmd==='ls') terminal.write(Object.keys(files).join('  ')+'\r\n');
+  else if(cmd==='pwd') terminal.write((directoryHandle?'/real/'+directoryHandle.name:isMobile?'/android':'/memory')+'\r\n');
+  else if(cmd==='cat'){var fn=p[1];terminal.write(files[fn]!==undefined?files[fn]+'\r\n':'Not found\r\n');}
+  else if(cmd==='save'){saveToDisk();terminal.write('Saving...\r\n');}
+  else if(cmd==='collab'){if(p[1]){document.getElementById('collab-room').value=p[1];startCollab();}else terminal.write('Usage: collab [room-name]\r\n');}
+  else if(cmd==='node'){try{terminal.write(String(eval(p.slice(1).join(' ')))+'\r\n');}catch(e){terminal.write('Error: '+e.message+'\r\n');}}
+  else if(cmd==='run'){var fn2=p[1]||currentFile;if(files[fn2]!==undefined){try{terminal.write(String(eval(files[fn2]))+'\r\n');}catch(e){terminal.write('Error: '+e.message+'\r\n');}}else terminal.write('Not found\r\n');}
+  else if(cmd!=='') terminal.write('Unknown: '+cmd+'\r\n');
+}
+function toggleTerminal(){
+  var c=document.getElementById('terminal-container');
+  terminalVisible=!terminalVisible;c.style.display=terminalVisible?'flex':'none';
+  if(terminalVisible)terminal.focus();
+}
+function clearTerminal(){terminal.clear();terminal.write(terminal.prompt);}
+
+// ════════════════════════════════════════════════════
+// COLLABORATION (Yjs + y-webrtc)
+// ════════════════════════════════════════════════════
+function openCollabModal(){document.getElementById('collab-modal').style.display='flex';}
+
+async function startCollab(){
+  var room=document.getElementById('collab-room').value.trim();
+  if(!room){showToast('Enter a room code','error');return;}
+  showToast('Connecting to room...');
+  try{
+    if(typeof Y==='undefined'){showToast('Collab not loaded — check internet','error');return;}
+    if(yjsProvider){try{yjsProvider.destroy();}catch(e){}}
+    ydoc=new Y.Doc();
+    yjsProvider=new YWebrtc.WebrtcProvider('zoews-'+room,ydoc,{
+      signaling:['wss://signaling.yjs.dev','wss://y-webrtc-signaling-eu.herokuapp.com']
+    });
+    yfiles=ydoc.getMap('files');
+
+    // Push local files to shared state
+    Object.keys(files).forEach(function(name){yfiles.set(name,files[name]||'');});
+
+    // Listen for remote changes
+    yfiles.observe(function(event){
+      event.changes.keys.forEach(function(change,key){
+        if(change.action==='add'||change.action==='update'){
+          var val=yfiles.get(key);
+          files[key]=val;
+          if(key===currentFile){
+            isApplyingRemote=true;
+            var cur=editor.getCursor();
+            editor.setValue(val);
+            try{editor.setCursor(cur);}catch(e){}
+            isApplyingRemote=false;
+          }
+        }
+      });
+      renderSidebar();
+    });
+
+    isCollaborating=true;
+    document.getElementById('collabBtn').classList.add('active');
+    document.getElementById('collab-indicator').textContent=' 🤝 Live';
+    document.getElementById('collab-status').textContent='🤝 Room: '+room;
+    var box=document.getElementById('collab-status-box');
+    box.style.display='block';
+    box.textContent='✅ Connected to room: '+room+'. Share this code with your collaborator!';
+    showToast('🤝 Collaboration started!','success');
+    sendNotification('Zoe Workspace','🤝 Collaboration started in room: '+room);
+    if(terminal)terminal.write('\r\nJoined collab room: '+room+'\r\n'+terminal.prompt);
+  }catch(e){
+    showToast('Collab error: '+e.message,'error');
+  }
+}
+
+function stopCollab(){
+  if(yjsProvider){try{yjsProvider.destroy();}catch(e){}}
+  yjsProvider=null;ydoc=null;yfiles=null;
+  isCollaborating=false;
+  document.getElementById('collabBtn').classList.remove('active');
+  document.getElementById('collab-indicator').textContent='';
+  document.getElementById('collab-status').textContent='';
+  document.getElementById('collab-status-box').style.display='none';
+  showToast('Collaboration ended');
+  closeModal('collab-modal');
+}
+
+// ════════════════════════════════════════════════════
+// GITHUB INTEGRATION
+// ════════════════════════════════════════════════════
+function openGithubModal(){document.getElementById('github-modal').style.display='flex';}
+
+function saveGHCreds(){
+  ghToken=document.getElementById('gh-token').value.trim();
+  ghOwner=document.getElementById('gh-owner').value.trim();
+  ghRepo=document.getElementById('gh-repo').value.trim();
+  ghBranch=document.getElementById('gh-branch').value.trim()||'main';
+  try{
+    localStorage.setItem('zw_gh_token',ghToken);
+    localStorage.setItem('zw_gh_owner',ghOwner);
+    localStorage.setItem('zw_gh_repo',ghRepo);
+    localStorage.setItem('zw_gh_branch',ghBranch);
+  }catch(e){}
+}
+
+async function githubLoad(){
+  saveGHCreds();
+  if(!ghToken||!ghOwner||!ghRepo){showToast('Fill in all GitHub fields','error');return;}
+  showToast('📥 Loading repository...');
+  try{
+    var headers={'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json'};
+    var treeRes=await fetch('https://api.github.com/repos/'+ghOwner+'/'+ghRepo+'/git/trees/'+ghBranch+'?recursive=1',{headers});
+    if(!treeRes.ok){var e=await treeRes.json();throw new Error(e.message);}
+    var treeData=await treeRes.json();
+    var blobs=treeData.tree.filter(function(i){return i.type==='blob'&&!i.path.includes('node_modules')&&!i.path.includes('.git')&&i.size<500000;});
+    files={};
+    var loaded=0;
+    // Load files in batches to avoid rate limiting
+    for(var item of blobs.slice(0,50)){
+      try{
+        var fr=await fetch('https://api.github.com/repos/'+ghOwner+'/'+ghRepo+'/contents/'+item.path+'?ref='+ghBranch,{headers});
+        var fd=await fr.json();
+        if(fd.encoding==='base64'){files[item.path]=atob(fd.content.replace(/\n/g,''));}
+        loaded++;
+      }catch(e){}
+    }
+    if(!Object.keys(files).length)files['index.html']='';
+    currentFile=Object.keys(files).sort()[0];
+    editor.setValue(files[currentFile]||'');setEditorMode(currentFile);
+    renderSidebar();unsaved=false;updateUnsavedIndicator();
+    var fn=document.getElementById('folder-name');fn.textContent='🐙 '+ghOwner+'/'+ghRepo;fn.style.display='block';
+    showToast('✅ Loaded '+loaded+' files from GitHub','success');
+    sendNotification('Zoe Workspace','✅ Repo loaded: '+ghOwner+'/'+ghRepo);
+    closeModal('github-modal');
+  }catch(e){showToast('GitHub error: '+e.message,'error');}
+}
+
+async function githubPush(){
+  saveGHCreds();
+  if(!ghToken||!ghOwner||!ghRepo){showToast('Fill in all GitHub fields','error');return;}
+  if(!currentFile){showToast('No file open','error');return;}
+  files[currentFile]=editor.getValue();
+  showToast('⬆ Pushing '+currentFile+'...');
+  try{
+    var headers={'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'};
+    // Get current file SHA (needed for update)
+    var sha='';
+    try{
+      var existRes=await fetch('https://api.github.com/repos/'+ghOwner+'/'+ghRepo+'/contents/'+currentFile+'?ref='+ghBranch,{headers});
+      if(existRes.ok){var existData=await existRes.json();sha=existData.sha||'';}
+    }catch(e){}
+    var body={message:'Update '+currentFile+' from Zoe Workspace',content:btoa(unescape(encodeURIComponent(files[currentFile]))),branch:ghBranch};
+    if(sha)body.sha=sha;
+    var pushRes=await fetch('https://api.github.com/repos/'+ghOwner+'/'+ghRepo+'/contents/'+currentFile,{method:'PUT',headers,body:JSON.stringify(body)});
+    if(!pushRes.ok){var pe=await pushRes.json();throw new Error(pe.message);}
+    showToast('✅ Pushed to GitHub!','success');
+    sendNotification('Zoe Workspace','✅ Pushed: '+currentFile+' → '+ghOwner+'/'+ghRepo);
+  }catch(e){showToast('Push error: '+e.message,'error');}
+}
+
+// ════════════════════════════════════════════════════
+// NETLIFY DEPLOY
+// ════════════════════════════════════════════════════
+function openNetlifyModal(){document.getElementById('netlify-modal').style.display='flex';}
+
+async function deployNetlify(){
+  var token=document.getElementById('net-token').value.trim();
+  var siteName=document.getElementById('net-site').value.trim();
+  if(!token){showToast('Enter your Netlify token','error');return;}
+  try{localStorage.setItem('zw_net_token',token);}catch(e){}
+  if(currentFile)files[currentFile]=editor.getValue();
+  showToast('🚀 Preparing deploy...');
+  var resultBox=document.getElementById('netlify-result');
+  resultBox.style.display='block';
+  resultBox.textContent='Building ZIP...';
+  try{
+    // Build ZIP of all files
+    var zip=new JSZip();
+    for(var name in files){zip.file(name,files[name]||'');}
+    var zipBlob=await zip.generateAsync({type:'blob'});
+    resultBox.textContent='Uploading to Netlify...';
+    // Create or update site
+    var headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
+    var sitePayload={};
+    if(siteName)sitePayload.name=siteName;
+    // Create new site
+    var siteRes=await fetch('https://api.netlify.com/api/v1/sites',{method:'POST',headers,body:JSON.stringify(sitePayload)});
+    if(!siteRes.ok){var se=await siteRes.json();throw new Error(se.message||'Site creation failed');}
+    var site=await siteRes.json();
+    // Deploy the ZIP
+    var deployRes=await fetch('https://api.netlify.com/api/v1/sites/'+site.id+'/deploys',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/zip'},
+      body:zipBlob
+    });
+    if(!deployRes.ok){var de=await deployRes.json();throw new Error(de.message||'Deploy failed');}
+    var deploy=await deployRes.json();
+    var liveUrl=deploy.deploy_ssl_url||deploy.deploy_url||site.ssl_url||site.url||'(check Netlify dashboard)';
+    resultBox.innerHTML='✅ <strong>Deployed!</strong><br>🌐 <a href="'+liveUrl+'" target="_blank" style="color:#80ffee;">'+liveUrl+'</a><br><span style="color:#888;font-size:10px;">Note: May take 30-60 seconds to go live</span>';
+    showToast('🚀 Deployed!','success');
+    sendNotification('Zoe Workspace','🚀 Deployed to: '+liveUrl);
+  }catch(e){
+    resultBox.textContent='❌ Error: '+e.message;
+    showToast('Deploy error: '+e.message,'error');
+  }
+}
+
+// ════════════════════════════════════════════════════
+// FORMAT (fixed plugin array)
+// ════════════════════════════════════════════════════
+async function formatCode(){
+  if(!currentFile)return;
+  var ext=currentFile.split('.').pop();
+  var pm={js:'babel',jsx:'babel',ts:'typescript',tsx:'typescript',css:'css',html:'html',json:'json'}[ext];
+  if(!pm){showToast('Format not supported for .'+ext,'error');return;}
+  try{
+    // Use Object.values to get an array of plugins
+    editor.setValue(await prettier.format(editor.getValue(),{parser:pm,plugins:Object.values(prettierPlugins)}));
+    unsaved=true;updateUnsavedIndicator();showToast('✨ Formatted!');
+  }catch(e){showToast('Format error: '+e.message,'error');}
+}
+
+// ════════════════════════════════════════════════════
+// LOCALSTORAGE
+// ════════════════════════════════════════════════════
+function saveToStorage(){
+  if(currentFile)files[currentFile]=editor.getValue();
+  try{localStorage.setItem('workspace',JSON.stringify(files));unsaved=false;updateUnsavedIndicator();showToast('🗄 Saved locally','success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+function loadFromStorage(){
+  var d=localStorage.getItem('workspace');
+  if(!d){showToast('Nothing saved yet','error');return;}
+  try{files=JSON.parse(d);}catch(e){showToast('Corrupted data','error');return;}
+  currentFile=Object.keys(files)[0]||'index.html';
+  editor.setValue(files[currentFile]);setEditorMode(currentFile);
+  renderSidebar();unsaved=false;updateUnsavedIndicator();showToast('📂 Loaded!','success');
+}
+
+// ════════════════════════════════════════════════════
+// ZIP
+// ════════════════════════════════════════════════════
+function downloadZip(){
+  if(currentFile)files[currentFile]=editor.getValue();
+  var z=new JSZip();
+  for(var n in files)z.file(n,files[n]||'');
+  z.generateAsync({type:'blob'}).then(function(c){
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(c);a.download='ZoeWorkspace.zip';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    showToast('📦 ZIP downloaded!','success');
+  }).catch(e=>showToast('ZIP error: '+e,'error'));
+}
+
+// ════════════════════════════════════════════════════
+// TEMPLATES
+// ════════════════════════════════════════════════════
+function applyTemplate(){
+  var v=document.getElementById('templateSelect').value;
+  if(v==='html')files['index.html']='<!DOCTYPE html>\n<html>\n<head><title>Page</title></head>\n<body>\n<h1>Hello</h1>\n</body>\n</html>';
+  else if(v==='react')files['index.html']='<!DOCTYPE html>\n<html>\n<head>\n<script src="https://unpkg.com/react@17/umd/react.development.js"><\/script>\n<script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"><\/script>\n<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>\n</head>\n<body>\n<div id="root"></div>\n<script type="text/babel">\nReactDOM.render(<h1>Hello React</h1>, document.getElementById(\'root\'));\n<\/script>\n</body>\n</html>';
+  else if(v==='vue')files['index.html']='<!DOCTYPE html>\n<html>\n<head>\n<script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>\n</head>\n<body>\n<div id="app">{{ message }}</div>\n<script>\nconst {createApp}=Vue;createApp({data(){return{message:"Hello Vue"}}}).mount("#app");\n<\/script>\n</body>\n</html>';
+  if(!files['index.html'])files['index.html']='';
+  switchFile('index.html');
+}
+
+// ════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════
+function openSettings(){
+  document.getElementById('modal').style.display='flex';
+  document.getElementById('tabSize').value=editor.getOption('tabSize')||2;
+  document.getElementById('lineWrap').checked=editor.getOption('lineWrapping');
+}
+function applySettings(){
+  document.querySelector('.CodeMirror').style.fontSize=parseInt(document.getElementById('fontSize').value)+'px';
+  editor.setOption('tabSize',parseInt(document.getElementById('tabSize').value));
+  editor.setOption('lineWrapping',document.getElementById('lineWrap').checked);
+  closeModal('modal');showToast('Settings saved');
+}
+function changeTheme(t){editor.setOption('theme',t);}
+function searchInEditor(){editor.execCommand('find');}
+
+// ════════════════════════════════════════════════════
+// VERCEL DEPLOY
+// ════════════════════════════════════════════════════
+function openVercelModal(){document.getElementById('vercel-modal').style.display='flex';}
+
+async function deployVercel(){
+  var token=document.getElementById('ver-token').value.trim();
+  var projName=document.getElementById('ver-project').value.trim()||'zoe-workspace-'+Date.now();
+  if(!token){showToast('Enter your Vercel token','error');return;}
+  try{localStorage.setItem('zw_ver_token',token);}catch(e){}
+  if(currentFile)files[currentFile]=editor.getValue();
+  var resultBox=document.getElementById('vercel-result');
+  resultBox.style.display='block'; resultBox.textContent='Preparing files...';
+  showToast('▲ Deploying to Vercel...');
+  try{
+    // Build file list for Vercel API
+    var fileArr=[];
+    for(var name in files){
+      var content=files[name]||'';
+      // Vercel expects files as array of {file, data} where data is base64 or string
+      fileArr.push({file:name, data:btoa(unescape(encodeURIComponent(content)))});
+    }
+    resultBox.textContent='Uploading to Vercel...';
+    var headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
+    var payload={name:projName,files:fileArr,projectSettings:{framework:null}};
+    var res=await fetch('https://api.vercel.com/v13/deployments',{method:'POST',headers,body:JSON.stringify(payload)});
+    if(!res.ok){var e=await res.json();throw new Error(e.error&&e.error.message||'Deploy failed');}
+    var data=await res.json();
+    var url='https://'+data.url;
+    resultBox.innerHTML='✅ <strong>Deployed to Vercel!</strong><br>🌐 <a href="'+url+'" target="_blank" style="color:#eee;">'+url+'</a><br><span style="color:#888;font-size:10px;">May take 1-2 minutes to go live</span>';
+    showToast('▲ Deployed to Vercel!','success');
+    sendNotification('Zoe Workspace','▲ Deployed to Vercel: '+url);
+  }catch(e){
+    resultBox.textContent='❌ Error: '+e.message;
+    showToast('Vercel error: '+e.message,'error');
+  }
+}
+
+window.addEventListener('beforeunload',function(e){if(unsaved){e.preventDefault();e.returnValue='';}});
+</script>
+</body>
+</html>
